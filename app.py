@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 import streamlit as st
+from zoneinfo import ZoneInfo  # ✅ 추가
 
 # 페이지 설정
 st.set_page_config(layout="wide")
@@ -49,9 +50,10 @@ st.sidebar.markdown(
 )
 
 st.sidebar.subheader("📅 기준날짜")
+today_kst = datetime.now(ZoneInfo("Asia/Seoul"))  # ✅ 한국시간
 selected_date = st.sidebar.date_input(
     "📅 기준날짜",
-    datetime.today().date(),
+    today_kst.date(),
     label_visibility="collapsed"
 )
 selected_items = []
@@ -76,7 +78,7 @@ st.sidebar.markdown("📄 **출처**: Yahoo Finance")
 st.sidebar.markdown("🛠️ **제작**: 디지털혁신팀")
 
 # 날짜 처리
-today = datetime.combine(selected_date, datetime.min.time())
+today = datetime.combine(selected_date, datetime.min.time()).replace(tzinfo=ZoneInfo("Asia/Seoul"))
 start_of_week = today - timedelta(days=today.weekday())
 end_of_week = start_of_week + timedelta(days=4)
 three_months_ago = today - timedelta(days=90)
