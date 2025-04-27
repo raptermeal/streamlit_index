@@ -171,7 +171,7 @@ if run_query and selected_items:
                 if len(past_dates) >= 2:
                     latest_date, second_latest_date = past_dates[0], past_dates[1]
                     prev_day_value = close_dict[latest_date]
-                    change_rate = (close_dict[second_latest_date] - prev_day_value) / close_dict[second_latest_date] * 100 if close_dict[second_latest_date] != 0 else None
+                    change_rate = -1 * (close_dict[second_latest_date] - prev_day_value) / close_dict[second_latest_date] * 100 if close_dict[second_latest_date] != 0 else None
                 else:
                     prev_day_value, change_rate = None, None
 
