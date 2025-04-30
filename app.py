@@ -39,10 +39,27 @@ import yfinance as yf
 import streamlit as st
 
 # 날짜 계산
+# def prepare_dates(selected_date):
+#     기준일 = datetime.combine(selected_date, datetime.min.time()).replace(tzinfo=ZoneInfo("Asia/Seoul"))
+#     start_date = 기준일 - timedelta(days=370)
+    
+#     # ✅ UTC 기준 시간 문제 방지: 오늘 날짜까지만 요청
+#     # today_utc = datetime.utcnow().date()
+#     # end_date = min(기준일 + timedelta(days=1), today_utc)
+#     end_date = 기준일 + timedelta(days=1)
+#     return 기준일, start_date, end_date
+
 def prepare_dates(selected_date):
     기준일 = datetime.combine(selected_date, datetime.min.time()).replace(tzinfo=ZoneInfo("Asia/Seoul"))
     start_date = 기준일 - timedelta(days=370)
-    end_date = 기준일 + timedelta(days=1)
+
+    # ✅ 오늘(UTC 기준)을 datetime 형식으로 변환
+    today_utc = datetime.utcnow().replace(tzinfo=ZoneInfo("UTC"))
+    today_utc_local = today_utc.astimezone(ZoneInfo("Asia/Seoul")).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # ✅ 기준일 다음날과 오늘(로컬 기준) 중 작은 값으로 제한
+    end_date = min(기준일 + timedelta(days=1), today_utc_local)
+
     return 기준일, start_date, end_date
 
 # 영업일 추출
