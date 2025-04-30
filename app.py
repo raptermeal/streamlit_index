@@ -116,7 +116,13 @@ def fetch_from_yfinance(ticker, start_date, end_date, country, category, label):
             end=end_date.strftime("%Y-%m-%d"),
             progress=False
         )
-        if data.empty or "Close" not in data.columns:
+        # ✅ 데이터가 비어있는 경우 경고 출력
+        if data.empty:
+            st.warning(f"⚠️ {ticker} (yfinance): 조회된 데이터가 없습니다. 기간: {start_date.date()} ~ {end_date.date()}")
+            return None
+
+        if "Close" not in data.columns:
+            st.warning(f"⚠️ {ticker} (yfinance): 'Close' 컬럼이 존재하지 않습니다.")
             return None
 
         data = data.reset_index()

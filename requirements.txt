@@ -4,3 +4,4 @@ streamlit
 openpyxl
 xlwings
 freecurrencyapi
+beautifulsoup4
