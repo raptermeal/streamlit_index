@@ -7,11 +7,6 @@ from openpyxl import load_workbook
 import shutil
 from io import BytesIO
 import os
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
-from datetime import datetime
-
 
 # ✅ 페이지 설정 (wide + 스타일 조정)
 st.set_page_config(layout="wide")
@@ -75,40 +70,8 @@ def get_reference_dates(기준일, business_days):
 def load_index_list(path):
     return pd.read_csv(path)
 
-def fetch_from_naver(ticker_code, country, category, label):
-    headers = {"User-Agent": "Mozilla/5.0"}
-
-    world_codes = {"FX_USDVND", "FX_USDIDR", "FX_USDPHP", "FX_USDCNY"}
-    if ticker_code in world_codes:
-        url = f"https://finance.naver.com/marketindex/worldDailyQuote.naver?fdtc=4&marketindexCd={ticker_code}&page=1&pageSize=500"
-    else:
-        url = f"https://finance.naver.com/marketindex/exchangeDailyQuote.naver?marketindexCd={ticker_code}&page=1&pageSize=500"
-
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, "html.parser")
-    table = soup.select_one("table.tbl_exchange")
-    rows = table.select("tbody > tr")
-
-    records = []
-    for row in rows:
-        cols = row.select("td")
-        if len(cols) < 2:
-            continue
-        try:
-            raw_date = cols[0].text.strip()
-            raw_close = cols[1].text.strip().replace(",", "")
-            date_obj = datetime.strptime(raw_date, "%Y.%m.%d")
-            close_val = float(raw_close)
-            records.append([country, category, label, ticker_code, date_obj, close_val])
-        except ValueError:
-            continue
-
-    df = pd.DataFrame(records, columns=["국가", "구분", "단위", "Ticker", "Date", "Close"])
-    return df.sort_values("Date").reset_index(drop=True)
-
-import yfinance as yf
-
-def fetch_from_yfinance(ticker, start_date, end_date, country, category, label):
+# 개별 티커 데이터 다운로드 및 전처리
+def download_and_clean_ticker_data(ticker, start_date, end_date, row_meta):
     try:
         data = yf.download(
             ticker,
@@ -116,62 +79,22 @@ def fetch_from_yfinance(ticker, start_date, end_date, country, category, label):
             end=end_date.strftime("%Y-%m-%d"),
             progress=False
         )
-        if data.empty or "Close" not in data.columns:
+
+        if data.empty or 'Close' not in data.columns:
             return None
 
         data = data.reset_index()
-        data = data[["Date", "Close"]]
-        data["국가"] = country
-        data["구분"] = category
-        data["단위"] = label
-        data["Ticker"] = ticker
+        data.columns = ["Date", "Close", "Open", "High", "Low", "Volume"]
+        data["국가"] = row_meta["국가"]
+        data["구분"] = row_meta["구분"]
+        data["단위"] = row_meta["항목명_짧은"]
+        data["Ticker"] = row_meta["티커"]
 
-        return data[["국가", "구분", "단위", "Ticker", "Date", "Close"]]
+        return data[["국가", "구분", "단위", "Ticker", "Date", "Close", "Open", "High", "Low", "Volume"]]
 
     except Exception as e:
-        st.warning(f"{ticker} (yfinance) 에러: {e}")
+        st.warning(f"{ticker} 에러: {e}")
         return None
-
-
-# 개별 티커 데이터 다운로드 및 전처리
-def fetch_price_data_by_source(ticker, start_date, end_date, row_meta):
-    source = row_meta.get("수집출처", "yfinance")
-    country = row_meta["국가"]
-    category = row_meta["구분"]
-    label = row_meta["항목명_짧은"]
-
-    if source == "yfinance":
-        return fetch_from_yfinance(ticker, start_date, end_date, country, category, label)
-    elif source == "naver":
-        return fetch_from_naver(ticker, country, category, label)
-    else:
-        st.warning(f"{ticker}의 수집출처 {source}는 지원되지 않습니다.")
-        return None
-
-# def download_and_clean_ticker_data(ticker, start_date, end_date, row_meta):
-#     try:
-#         data = yf.download(
-#             ticker,
-#             start=start_date.strftime("%Y-%m-%d"),
-#             end=end_date.strftime("%Y-%m-%d"),
-#             progress=False
-#         )
-
-#         if data.empty or 'Close' not in data.columns:
-#             return None
-
-#         data = data.reset_index()
-#         data.columns = ["Date", "Close", "Open", "High", "Low", "Volume"]
-#         data["국가"] = row_meta["국가"]
-#         data["구분"] = row_meta["구분"]
-#         data["단위"] = row_meta["항목명_짧은"]
-#         data["Ticker"] = row_meta["티커"]
-
-#         return data[["국가", "구분", "단위", "Ticker", "Date", "Close", "Open", "High", "Low", "Volume"]]
-
-#     except Exception as e:
-#         st.warning(f"{ticker} 에러: {e}")
-#         return None
 
 # 개별 레코드 계산
 def calculate_price_record(price_series, row_meta, last_year_end, prev_month_end, recent_days, headers):
@@ -181,20 +104,10 @@ def calculate_price_record(price_series, row_meta, last_year_end, prev_month_end
         "단위": row_meta["항목명_짧은"],
     }
 
-    # 인덱스를 날짜로 변환
-    price_series.index = price_series.index.date
-
     values = {}
     for d, h in zip([last_year_end, prev_month_end] + recent_days, headers[:-2]):
-        nearest_dates = [dt for dt in price_series.index if dt <= d.date()]
-        if not nearest_dates:
-            values[h] = None
-        else:
-            nearest_date = max(nearest_dates)
-            value = price_series.loc[nearest_date]
-            if isinstance(value, pd.Series):
-                value = value.item()
-            values[h] = value
+        nearest_dates = [dt for dt in price_series.index if dt.date() <= d.date()]
+        values[h] = price_series.loc[max(nearest_dates)] if nearest_dates else None
 
     try:
         day_1 = values[headers[6]]
@@ -212,19 +125,16 @@ def calculate_price_record(price_series, row_meta, last_year_end, prev_month_end
     record.update(values)
     return record
 
-
 # 전체 데이터 수집 및 조합
 def collect_all_data(index_df, start_date, end_date, last_year_end, prev_month_end, recent_days, headers):
     records = []
     raw_records = []
 
     for _, row in index_df.iterrows():
-        # data = download_and_clean_ticker_data(row["티커"], start_date, end_date, row)
-        data = fetch_price_data_by_source(row["티커"], start_date, end_date, row)
+        data = download_and_clean_ticker_data(row["티커"], start_date, end_date, row)
         if data is None:
             continue
 
-        data.columns = ["국가", "구분", "단위", "Ticker", "Date", "Close"]
         raw_records.append(data)
         price_series = data.set_index("Date")["Close"].dropna()
         record = calculate_price_record(price_series, row, last_year_end, prev_month_end, recent_days, headers)
@@ -238,7 +148,7 @@ def collect_all_data(index_df, start_date, end_date, last_year_end, prev_month_e
 def sort_final_df(df_final):
     if not df_final.empty:
         country_order = {"베트남": 0, "인니": 1, "한국": 2, "필리핀": 3, "중국": 4, "미국": 5}
-        category_order = {"주가": 0, "환율": 1}
+        category_order = {"주식": 0, "환율": 1}
         df_final["국가순서"] = df_final["국가"].map(country_order)
         df_final["구분순서"] = df_final["구분"].map(category_order)
         df_final = df_final.sort_values(["국가순서", "구분순서"]).drop(columns=["국가순서", "구분순서"]).reset_index(drop=True)
@@ -254,11 +164,6 @@ def fetch_data(selected_date):
     df_final = sort_final_df(df_final)
     return df_final, df_raw, recent_days
 
-
-# today = datetime.strptime('2025-04-30', '%Y-%m-%d').date()
-# df_final, df_raw, recent_days = fetch_data(today)
-# print(df_final)
-# print(df_raw)
 
 # ===========================================
 # ✅ 메인 스트림릿 로직
@@ -383,7 +288,6 @@ if 'df_final' in st.session_state and st.session_state["ready"] and not st.sessi
     ws_raw = wb["rawdata"]
     for idx, col_name in enumerate(st.session_state.df_raw.columns, 1):
         ws_raw.cell(row=1, column=idx).value = col_name
-        print(col_name)
     for row_idx, row in enumerate(st.session_state.df_raw.values, 2):
         for col_idx, value in enumerate(row, 1):
             ws_raw.cell(row=row_idx, column=col_idx).value = value

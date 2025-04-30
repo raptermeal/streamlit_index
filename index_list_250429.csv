@@ -1,0 +1,11 @@
+구분,국가,국가_짧은명,항목명,항목명_짧은,티커
+지표,중국,중,Shenzhen Index,SEZE,399001.SZ
+지표,베트남,베,Vietnam VN Index,VNI,0P0000HY8X.VN
+지표,한국,한,KOSPI Composite Index,KOSPI,^KS11
+지표,인니,인,IDX Composite,IDX,^JKSE
+지표,필리핀,필,PSEi,PSEi,PSEi.PS
+환율,베트남,베,USD/VND,USD/VND,USDVND=X
+환율,인니,인,USD/IDR,USD/IDR,USDIDR=X
+환율,한국,한,USD/KRW,USD/KRW,USDKRW=X
+환율,필리핀,필,USD/PHP,USD/PHP,USDPHP=X
+환율,중국,중,USD/CNY,USD/CNY,USDCNY=X
